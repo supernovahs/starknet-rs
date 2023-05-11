@@ -1,10 +1,10 @@
-[workspace.package]
+[package]
+name = "starkrs"
 version = "0.1.0"
 edition = "2021"
 
-[workspace]
-members = ["starkrs","stark-core"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[workspace.dependencies]
+[dependencies]
+stark-core = { path = "../stark-core", default-features = false }
 ethers = "2.0.4"

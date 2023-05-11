@@ -1,0 +1,7 @@
+{
+    "rust-analyzer.linkedProjects": [
+        "./starkrs/stark-core/Cargo.toml",
+        "./starkrs/stark-core/Cargo.toml"
+    ],
+    "rust-analyzer.showUnlinkedFileNotification": false
+}
