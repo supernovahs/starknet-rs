@@ -8,3 +8,5 @@ edition = "2021"
 [dependencies]
 ethers = "2.0.4"
 lazy_static = "1.4.0"
+primitive-types = { version = "0.10", features = ["serde"] }
+serde = "1.0"

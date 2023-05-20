@@ -1,0 +1,20 @@
+[package]
+name = "stark-provider"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+reqwest = { version ="0.11.17",features = ["json"] }
+tokio = {version = "1"  , features = ["full"]}
+serde = {version = "1.0.163", features = ["derive"]}
+serde_json = "1.0"
+url  = "*"
+async-trait= "*"
+ethers = "2.0.4"
+stark-core = { path = "../stark-core" }  # adjust the path as needed
+primitive-types = { version = "0.10", features = ["serde"] }
+sha3 = "0.8.2"
+hex = "0.4.3"
+
