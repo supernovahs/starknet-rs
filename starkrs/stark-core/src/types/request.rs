@@ -21,6 +21,7 @@ pub struct CommonProperties{
 
 #[derive(Serialize, Deserialize,Debug,Clone)] 
 pub struct EventEmitter{
+    #[serde(rename = "type")]
     pub type_:String,
     pub contract_class:String,
     pub sender_address:String,
@@ -35,6 +36,7 @@ pub struct InvokeTransactionV1{
 
 #[derive(Serialize, Deserialize,Debug,Clone)]
 pub struct DeclareV1{
+    #[serde(rename = "type")]
     pub type_:String,
     pub contract_class:String,
     pub sender_address:String
@@ -42,6 +44,7 @@ pub struct DeclareV1{
 
 #[derive(Serialize, Deserialize,Debug,Clone)]
 pub struct DeployAccountTransactionProperties{
+    #[serde(rename = "type")]
     pub type_:String,
     pub contract_address_salt:String,
     pub constructor_calldata: Vec<String>,

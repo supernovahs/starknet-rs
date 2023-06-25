@@ -4,11 +4,42 @@ use serde_json::json;
 use serde::{Serialize,Deserialize};
 use serde::de::DeserializeOwned;
 use std::fmt::Debug;
+use stark_core::utils::constants::MASK_250;
 use stark_core::types::request::{
     TransactionRequest,BroadcastedTransaction,Transaction,DeployAccountTransactionProperties,DeclareV1,InvokeTransactionV1,EventEmitter,CommonProperties};
+use num_bigint::BigInt;
+use std::str::FromStr;
+use num_traits::One;
+use num_traits::Num;
+use ethers::types::U256;
+use ethers::utils::keccak256;
+use num_traits::Pow;
+
+
+
+
+
+
 pub struct Provider  {
     url:Url,
     client:Client,
+}
+
+pub fn keccak_hex(value: &str ) -> String {
+    let hash = keccak256(value.as_bytes());
+    let z:String = hex::encode(hash);
+    z
+}
+
+pub fn starknet_keccak(value: &str) -> BigInt {
+    let hash_hex = keccak_hex(value);
+    let value = BigInt::from_str_radix(&hash_hex, 16).expect("Failed to parse hex string to BigInt");
+    let mask_250:BigInt = BigInt::from(2).pow(250u64) - BigInt::one();
+    value & mask_250
+}
+
+pub fn get_selector_from_name(func_name: &str) -> String {
+    format!("{:#x}",starknet_keccak(func_name))
 }
 
 impl Provider {
@@ -120,6 +151,7 @@ pub async fn get_block_transaction_count(&self,block_number:u64) -> Result<serde
     self.request(method,params).await
 }
 
+
 pub async fn call(&self,tx:TransactionRequest,block_number:u64) -> Result<serde_json::Value,reqwest::Error>{
     let method = "starknet_call";
     let params = [serde_json::json!(tx),serde_json::json!({"block_number":block_number})];
@@ -167,12 +199,14 @@ mod tests {
     use stark_core::types::request::TransactionRequest;
     use primitive_types::{H256};
     use sha3::{Digest,Keccak256};
+    use crate::rpc::get_selector_from_name;
     extern crate hex;
     use hex::encode;
     use stark_core::utils::constants::MASK_250;
     use ethers::types::U256;
     use stark_core::types::request::{
         BroadcastedTransaction,Transaction,DeployAccountTransactionProperties,DeclareV1,InvokeTransactionV1,EventEmitter,CommonProperties};
+    use serde::{Deserialize, Serialize};
 
     // Helper function to create a Provider instance for testing
     fn setup_provider() -> Provider {
@@ -318,25 +352,19 @@ mod tests {
     #[tokio::test]
     async fn test_call() {
         let provider = setup_provider();
-        let func_name = "approve(felt,Uint256)";
+        let func_name = "approve";
         let calldatavec: Vec<String> = vec![
-            "0x41fd22b238fa21cfcf5dd45a8548974d8263b3a531a60388411c5e230f97023".to_string(),
-            "0x371d22c74aaeb".to_string()
+            "0x7a6f98c03379b9513ca84cca1373ff452a7462a3b61598f0af5bb27ad7f76d1".to_string(),
+            "5840374794613697".to_string()
         ];
-        let mut  entry_point_selector_bytes = keccak256(func_name);
-        println!("keccak hash of string {:?}",entry_point_selector_bytes);
-        let entry_point_selector_U256 = U256::from_big_endian(&entry_point_selector_bytes);
-        let entry_point_selector_250 = entry_point_selector_U256 & *MASK_250;
-        println!("final string {}",entry_point_selector_250);
-        entry_point_selector_250.to_big_endian(&mut entry_point_selector_bytes);
-        let entry_point_selector_string = encode(entry_point_selector_bytes);
-        println!("entry point selector string: {}", entry_point_selector_string);
+        let res = get_selector_from_name(func_name);
+        println!("entry point selector is : {}",res);
             let tx: TransactionRequest = TransactionRequest { 
             contract_address:Some("0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7".to_string()),
             entry_point_selector:Some("0x0219209e083275171774dab1df80982e9df2096516f06319c5c6d71ae0a8480c".to_string()),
             calldata:calldatavec
         };
-        let result = provider.call(tx,59269).await;
+        let result = provider.call(tx,87673).await;
         assert!(result.is_ok());
         println!("call res {}",result.unwrap());
     }
@@ -345,10 +373,10 @@ mod tests {
     async fn test_estimate_fee() {
         let provider = setup_provider();
         let common_properties = CommonProperties{
-            max_fee: 563758726650372,
+            max_fee: 1837758943871232,
             version:1,
-            signature:vec!["https://starkscan.co/tx/0x079a1ad1054418606478b81e11e25fab28aef47a0a22c53b1cc47017e44e0c8f#overview".to_string(),"https://starkscan.co/tx/0x079a1ad1054418606478b81e11e25fab28aef47a0a22c53b1cc47017e44e0c8f#overview".to_string()],
-            nonce:6
+            signature:vec!["0x27c41433bb3263a2e7d357a6d7d2b856b19a27b5c6089fa5ec4a55de507c49a".to_string(),"0x18794acabc26005629b1d857cd6e4e7e850614aa3e594b39650858836418d8e".to_string()],
+            nonce:7
         };
         let event_emitter = EventEmitter{
             type_:"sf".to_string(),
@@ -357,14 +385,9 @@ mod tests {
             compiler_class_hash:"fsd".to_string()
         };
         let invoke_transaction = InvokeTransactionV1{
-            sender_address:"0x055182f0243844db9650facb4206a228f5729b50283f5b5aeb4e53832def7406".to_string(),
-            calldata: vec!["0x55182f0243844db9650facb4206a228f5729b50283f5b5aeb4e53832def7406".to_string(),
-            "273978".to_string(),
-            "1".to_string(),
-            "500000".to_string(),
-            "1715734800".to_string(),
-            "0x140c49228d6b75836f72b0580bf1108651e15196fe7c5f4067aa24958ca2023".to_string(),
-            "0x293dbd2f52d2d519f6f9f28745da3be316c33b8828c296dccbc39c3191c0a8f".to_string()
+            sender_address:"0x00451d8a3566c18929c6c7312b7fee619dcb4210870ad5534680da0b17cee431".to_string(),
+            calldata: vec!["0xb9b1a4373de5b1458e598df53195ea3204aa926f46198b50b32ed843ce508b".to_string(),
+            "0x4563918244f40000".to_string()
             ]
         };
         let declare_v1 = DeclareV1{

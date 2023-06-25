@@ -17,4 +17,6 @@ stark-core = { path = "../stark-core" }  # adjust the path as needed
 primitive-types = { version = "0.10", features = ["serde"] }
 sha3 = "0.8.2"
 hex = "0.4.3"
-
+num-bigint = "0.4"
+num-traits = "*"
+ethereum-types = "0.12.0"
