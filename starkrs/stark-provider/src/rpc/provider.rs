@@ -169,7 +169,7 @@ pub async fn get_storage_at(&self,contract_address:&str,key:&str,val:BlockNumber
  result
 }
 
-pub async fn get_transaction_hash(&self,hash:&str) -> Result<serde_json::Value,reqwest::Error>{
+pub async fn get_transaction_by_hash(&self,hash:String) -> Result<serde_json::Value,reqwest::Error>{
     let method = "starknet_getTransactionByHash";
     let params = [serde_json::json!(hash)];
     self.request(method,params).await
@@ -459,9 +459,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_transaction_hash() {
+    async fn test_get_transaction_by_hash() {
         let provider = setup_provider();
-        let result = provider.get_transaction_hash("0x035475b21b0bc1799053bbf41f191d480e81bdb8eea6874d214dc5cc9882092e").await;
+        let result = provider.get_transaction_by_hash("0x035475b21b0bc1799053bbf41f191d480e81bdb8eea6874d214dc5cc9882092e".to_string()).await;
         assert!(result.is_ok());
         println!("transaction details {}",result.unwrap());
     }
