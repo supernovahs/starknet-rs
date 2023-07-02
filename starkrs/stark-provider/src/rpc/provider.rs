@@ -346,7 +346,11 @@ mod tests {
         let provider = setup_provider();
         let result = provider.get_block_with_txs(BlockNumber::BlockTag(BlockTag::latest)).await;
         assert!(result.is_ok());
-        println!("block with txs using latest enum  : {}",result.unwrap());
+        println!("block with txs using latest block tag  : {}",result.unwrap());
+
+        let pending_block_result = provider.get_block_with_txs(BlockNumber::BlockTag(BlockTag::pending)).await;
+        assert!(pending_block_result.is_ok());
+        println!("block with txs using pending block tag : {}",pending_block_result.unwrap());
 
         let block_number_result= provider.get_block_with_txs(BlockNumber::Number(95812)).await;
         assert!(block_number_result.is_ok());
