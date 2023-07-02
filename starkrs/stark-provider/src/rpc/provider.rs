@@ -149,10 +149,24 @@ pub async fn get_state_update(&self,val:BlockNumber) -> Result<serde_json::Value
     
 }
 
-pub async fn get_storage_at(&self,contract_address:&str,key:&str,block_number:u64) -> Result<serde_json::Value,reqwest::Error>{
+pub async fn get_storage_at(&self,contract_address:&str,key:&str,val:BlockNumber) -> Result<serde_json::Value,reqwest::Error>{
     let method = "starknet_getStorageAt";
-    let params = [serde_json::json!(contract_address), serde_json::json!(key), serde_json::json!({ "block_number": block_number })];
-    self.request(method,params).await
+    let result:Result<serde_json::Value,reqwest::Error>;
+    result = match val {
+        BlockNumber::BlockTag(val) =>{
+            let params  = [serde_json::json!(contract_address),serde_json::json!(key),serde_json::json!(val)];
+            self.request(method,params).await
+        }
+        BlockNumber::Hash(val)=>{
+            let params  = [serde_json::json!(contract_address),serde_json::json!(key),serde_json::json!({"block_hash":val})];
+            self.request(method,params).await
+        }
+        BlockNumber::Number(val) =>{
+            let params = [serde_json::json!(contract_address),serde_json::json!(key),serde_json::json!({"block_number":val})];
+            self.request(method,params).await
+        }
+    };
+ result
 }
 
 pub async fn get_transaction_hash(&self,hash:&str) -> Result<serde_json::Value,reqwest::Error>{
@@ -426,9 +440,22 @@ mod tests {
     #[tokio::test]
     async fn test_get_storage_at() {
         let provider = setup_provider();
-        let result = provider.get_storage_at("0x03d39f7248fb2bfb960275746470f7fb470317350ad8656249ec66067559e892","0x04",52668).await;
-        assert!(result.is_ok());
-        println!("storage at : {}",result.unwrap());
+
+        let block_number_result = provider.get_storage_at("0x03d39f7248fb2bfb960275746470f7fb470317350ad8656249ec66067559e892","0x04",BlockNumber::Number(52668)).await;
+        assert!(block_number_result.is_ok());
+        println!("storage at : {}",block_number_result.unwrap());
+
+        let block_hash_result = provider.get_storage_at("0x03d39f7248fb2bfb960275746470f7fb470317350ad8656249ec66067559e892","0x04",BlockNumber::Hash("0x0334d5edaf94bffa53f00024985e84f9aa0b4ac1601d0d7e8797fdd7e1af95b8".to_string())).await;
+        assert!(block_hash_result.is_ok());
+        println!("storage using block hash :{}",block_hash_result.unwrap());
+
+        let block_tag_latest_result = provider.get_storage_at("0x03d39f7248fb2bfb960275746470f7fb470317350ad8656249ec66067559e892","0x04", BlockNumber::BlockTag(BlockTag::latest)).await;
+        assert!(block_tag_latest_result.is_ok());
+        println!("storage at latest block :{}",block_tag_latest_result.unwrap());
+
+        let block_tag_latest_result = provider.get_storage_at("0x03d39f7248fb2bfb960275746470f7fb470317350ad8656249ec66067559e892","0x04", BlockNumber::BlockTag(BlockTag::pending)).await;
+        assert!(block_tag_latest_result.is_ok());
+        println!("storage at latest block :{}",block_tag_latest_result.unwrap());
     }
 
     #[tokio::test]
