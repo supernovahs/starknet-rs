@@ -11,7 +11,7 @@ use num_bigint::BigInt;
 use std::str::FromStr;
 use num_traits::One;
 use num_traits::Num;
-use ethers::types::U256;
+use ethers::types::{U256 };
 use ethers::utils::keccak256;
 use num_traits::Pow;
 
@@ -128,10 +128,25 @@ pub async fn get_block_with_txs(&self,val:BlockNumber) -> Result<serde_json::Val
    result
 }
 
-pub async fn get_state_update(&self,block_number:u64) -> Result<serde_json::Value,reqwest::Error>{
+pub async fn get_state_update(&self,val:BlockNumber) -> Result<serde_json::Value,reqwest::Error>{
     let method = "starknet_getStateUpdate";
-    let params = [serde_json::json!({"block_number":block_number})];
-    self.request(method,params).await
+    let result: Result<serde_json::Value, reqwest::Error>;
+    match val{
+        BlockNumber::Number(val) =>{
+            let params = [serde_json::json!({"block_number":val})];
+            result = self.request(method,params).await;
+        }
+        BlockNumber::Hash(val) =>{
+            let params = [serde_json::json!({"block_hash":val})];
+            result = self.request(method,params).await;
+
+        },
+        _=>{
+            result = Ok(serde_json::Value::Null)
+        }
+    };
+    result
+    
 }
 
 pub async fn get_storage_at(&self,contract_address:&str,key:&str,block_number:u64) -> Result<serde_json::Value,reqwest::Error>{
@@ -295,7 +310,8 @@ mod tests {
     use stark_core::types::request::{
         BroadcastedTransaction,Transaction,DeployAccountTransactionProperties,DeclareV1,InvokeTransactionV1,InvokeTransactionV0,EventEmitter,CommonProperties,TypeTx,TypeOfTx,BlockNumber};
     use serde::{Serialize, Deserialize};
-    use stark_core::types::request::BlockTag;   // Helper function to create a Provider instance for testing
+    use stark_core::types::request::BlockTag;  
+    use core::ptr::null ;
     fn setup_provider() -> Provider {
         let url = "https://starknet-mainnet.public.blastapi.io";
         Provider::new(url).unwrap()
@@ -393,10 +409,19 @@ mod tests {
     #[tokio::test]
     async fn test_get_state_update() {
         let provider = setup_provider();
-        let result = provider.get_state_update(52668).await;
-        assert!(result.is_ok());
-        println!("state update : {}",result.unwrap());
-    }
+
+        let block_number_result = provider.get_state_update(BlockNumber::Number(95812)).await;
+        assert!(block_number_result.is_ok());
+        println!("state update : {}",block_number_result.unwrap());
+
+        let block_hash_result= provider.get_state_update(BlockNumber::Hash(("0x04029c604ad1da801b55ef0ff6ac5d72153564efb415e3e45bd27bd4abdb61bd".to_string()))).await;
+        assert!(block_hash_result.is_ok());
+        println!("state update with block hash: {}",block_hash_result.unwrap());
+
+        let other_result = provider.get_state_update(BlockNumber::BlockTag((BlockTag::pending))).await;
+        assert!(other_result.is_ok());
+        assert!(other_result.unwrap() == serde_json::Value::Null);
+        }
 
     #[tokio::test]
     async fn test_get_storage_at() {
