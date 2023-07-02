@@ -87,10 +87,25 @@ pub async fn stark_getnonce(&self,address:&str,block_number:u64) -> Result<serde
     println!("params : {:?}",params);
     self.request(method,params).await
 } 
-pub async fn get_block_with_tx_hashes(&self,block_number:u64) -> Result<serde_json::Value,reqwest::Error>{
+
+pub async fn get_block_with_tx_hashes(&self,val:BlockNumber) -> Result<serde_json::Value,reqwest::Error>{
     let method = "starknet_getBlockWithTxHashes";
-    let params = [serde_json::json!({ "block_number": block_number })];
-    self.request(method,params).await
+    let result: Result<serde_json::Value, reqwest::Error>;
+    match val{
+        BlockNumber::Number(val) =>{
+            let params = [serde_json::json!({ "block_number": val })];
+            result = self.request(method,params).await
+        }
+        BlockNumber::BlockTag(val) =>{
+            let params = [serde_json::json!(val)];
+            result= self.request(method,params).await
+        }
+        BlockNumber::Hash(val) =>{
+            let params = [serde_json::json!({"block_hash":val})];
+            result = self.request(method,params).await
+        }
+    }
+    result
 }
 
 pub async fn get_block_with_txs(&self,val:BlockNumber) -> Result<serde_json::Value,reqwest::Error>{
@@ -336,9 +351,23 @@ mod tests {
     #[tokio::test]
     async fn test_get_block_with_tx_hashes() {
         let provider = setup_provider();
-        let result = provider.get_block_with_tx_hashes(52668).await;
-        assert!(result.is_ok());
-        println!("block with tx hashes : {}",result.unwrap());
+
+        let block_number_result = provider.get_block_with_tx_hashes(BlockNumber::Number(95812)).await;
+        assert!(block_number_result.is_ok());
+        println!("block with tx hashes using block number : {}",block_number_result.unwrap());
+
+        let block_hash_result = provider.get_block_with_tx_hashes(BlockNumber::Hash("0x04029c604ad1da801b55ef0ff6ac5d72153564efb415e3e45bd27bd4abdb61bd".to_string())).await;
+        assert!(block_hash_result.is_ok());
+        println!("block hash with tx hashes using block hashes : {}",block_hash_result.unwrap());
+
+        let pending_block_result = provider.get_block_with_tx_hashes(BlockNumber::BlockTag(BlockTag::pending)).await;
+        assert!(pending_block_result.is_ok());
+        println!("pending lbock tx hashes:{}",pending_block_result.unwrap());
+        
+        let latest_block_result = provider.get_block_with_tx_hashes(BlockNumber::BlockTag((BlockTag::latest))).await;
+        assert!(latest_block_result.is_ok());
+        println!("latest block tx hashes :{}",latest_block_result.unwrap());
+
     }
 
     #[tokio::test]
