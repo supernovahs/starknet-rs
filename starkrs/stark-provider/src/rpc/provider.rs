@@ -6,7 +6,7 @@ use serde::de::DeserializeOwned;
 use std::fmt::Debug;
 use stark_core::utils::constants::MASK_250;
 use stark_core::types::request::{
-    TransactionRequest,BroadcastedTransaction,Transaction,DeployAccountTransactionProperties,DeclareV1,InvokeTransactionV1,EventEmitter,CommonProperties};
+    TransactionRequest,BroadcastedTransaction,Transaction,DeployAccountTransactionProperties,DeclareV1,InvokeTransactionV1,EventEmitter,CommonProperties,TypeTx,BlockNumber};
 use num_bigint::BigInt;
 use std::str::FromStr;
 use num_traits::One;
@@ -14,10 +14,6 @@ use num_traits::Num;
 use ethers::types::U256;
 use ethers::utils::keccak256;
 use num_traits::Pow;
-
-
-
-
 
 
 pub struct Provider  {
@@ -79,22 +75,42 @@ pub async fn stark_chain_id(&self) -> Result<serde_json::Value,reqwest::Error>{
     self.request(method,params).await
 }
 
+pub async fn stark_blockhash_and_number(&self) ->Result<serde_json::Value,reqwest::Error>{
+    let method = "starknet_blockHashAndNumber";
+    let params = json!([]);
+    self.request(method,params).await
+} 
+
 pub async fn stark_getnonce(&self,address:&str,block_number:u64) -> Result<serde_json::Value,reqwest::Error>{
     let method = "starknet_getNonce";
     let params = [serde_json::json!({ "block_number": block_number }), serde_json::json!(address)];
     println!("params : {:?}",params);
     self.request(method,params).await
 } 
-pub async fn get_block_wtih_tx_hashes(&self,block_number:u64) -> Result<serde_json::Value,reqwest::Error>{
+pub async fn get_block_with_tx_hashes(&self,block_number:u64) -> Result<serde_json::Value,reqwest::Error>{
     let method = "starknet_getBlockWithTxHashes";
     let params = [serde_json::json!({ "block_number": block_number })];
     self.request(method,params).await
 }
 
-pub async fn get_block_with_txs(&self,block_number:u64) -> Result<serde_json::Value,reqwest::Error>{
+pub async fn get_block_with_txs(&self,val:BlockNumber) -> Result<serde_json::Value,reqwest::Error>{
     let method = "starknet_getBlockWithTxs";
-    let params = [serde_json::json!({"block_number":block_number})];
-    self.request(method,params).await
+    let result: Result<serde_json::Value, reqwest::Error>;
+    match val{
+        BlockNumber::BlockTag(val) =>{
+            let params  = [serde_json::json!(val)];
+            result =self.request(method,params).await
+        }
+        BlockNumber::Hash(val)=>{
+            let params  = [serde_json::json!({"block_hash":val})];
+            result= self.request(method,params).await
+        }
+        BlockNumber::Number(val) =>{
+            let params = [serde_json::json!({"block_number":val})];
+            result = self.request(method,params).await
+        }
+    }
+   result
 }
 
 pub async fn get_state_update(&self,block_number:u64) -> Result<serde_json::Value,reqwest::Error>{
@@ -151,7 +167,6 @@ pub async fn get_block_transaction_count(&self,block_number:u64) -> Result<serde
     self.request(method,params).await
 }
 
-
 pub async fn call(&self,tx:TransactionRequest,block_number:u64) -> Result<serde_json::Value,reqwest::Error>{
     let method = "starknet_call";
     let params = [serde_json::json!(tx),serde_json::json!({"block_number":block_number})];
@@ -164,20 +179,27 @@ pub async fn estimate_fee(&self,tx:Vec<Transaction>,block_number:u64) -> Vec<Res
     for transaction in tx {
       let result =  match transaction {
             Transaction::EventEmitter(ev,common) => {
-                let params = [serde_json::json!(ev),serde_json::json!({"block_number":block_number})];
+                let params = [serde_json::json!({"transaction":ev, "common":common}),serde_json::json!({"block_number":block_number})];
                 self.request(method,params).await
             },
             Transaction::DeclareV1(dec,common) => {
-                let params = [serde_json::json!(dec),serde_json::json!({"block_number":block_number})];
+                let params = [serde_json::json!({"transaction":dec,"common":common}),serde_json::json!({"block_number":block_number})];
                 self.request(method,params).await
             },
             Transaction::DeployAccountTransactionProperties(dep,common) => {
-                let params = [serde_json::json!(dep),serde_json::json!({"block_number":block_number})];
+                let params = [serde_json::json!({"transaction":dep,"common":common}),serde_json::json!({"block_number":block_number})];
                 self.request(method,params).await
             },
-            Transaction::InvokeTransactionV1(inv,commom ) => {
-                let params = [serde_json::json!(inv),serde_json::json!({"block_number":block_number})];
+            Transaction::InvokeTransactionV0(tp,cp,iv) => {
+                let params = [serde_json::json!(tp),serde_json::json!(cp),serde_json::json!(iv),serde_json::json!({"block_number":block_number})];
                 self.request(method,params).await
+            },
+            Transaction::InvokeTransactionV1(iv) => {
+                let params = [serde_json::json!(iv),serde_json::json!({"block_number":block_number})];
+                self.request(method,params).await
+            },
+            _=>{
+                Ok(serde_json::Value::Null)
             }
         };
         results.push(result);
@@ -185,11 +207,62 @@ pub async fn estimate_fee(&self,tx:Vec<Transaction>,block_number:u64) -> Vec<Res
     results
 }
 
+// pub async fn pending_Transactions(&self, tx:Vec<Transaction>) -> Vec<Result<serde_json::Value,reqwest::Error>>{
+//     let method = "starknet_pendingTransactions";
+//     let mut results:Vec<Result<serde_json::Value,reqwest::Error>> = Vec::new();
+//     for transaction in tx {
+//         let result = match transaction {
+//             Transaction::TxHash(hash,dp) => {
+//                 let params = [serde_json::json!({"transaction":hash,"common":dp})];
+//                 self.request(method,params).await
+//             }
+//             Transaction::InvokeTransactionV1(inv,cp)=>{
+//                 let params = [serde_json::json!(inv)];
+//                 self.request(method,params).await
+//             }
+//             Transaction::L1HandlerTransaction(lht) =>{
+//                 let params = [serde_json::json!(lht)];
+//                 self.request(method,params).await
+//             }
+//             Transaction::DeployAccountTransactionProperties(tp ,cp) =>{
+//                 let params = [serde_json::json!({"transaction":tp,"commom":cp})];
+//                 self.request(method,params).await
+//             }
+//             Transaction::TxHashClassHash(tc) =>{
+//                 let params  = [serde_json::json!(tc)];
+//                 self.request(method,params).await
+//             }
+//             Transaction::InvokeTransactionV0(iv0)=>{
+//                 let params = [serde_json::json!(iv0)];
+//                 self.request(method,params).await
+//             }
+//             _=>{
+//                 Ok(serde_json::Value::Null)
+//             }
+//         };
+//         results.push(result);
+//     }
+//     results
+// }
 
+
+pub async fn syncing(&self) ->Result<serde_json::Value,reqwest::Error>{
+    let method = "starknet_syncing";
+    let params = json!([]);
+    self.request(method,params).await   
 }
 
+pub async fn getEvents(&self, tx:Transaction) -> Result<serde_json::Value,reqwest::Error>{
+    let method = "starknet_getEvents";
+     if let Transaction::EventFilter(ev,rpp) = tx {
+    let params = [serde_json::json!({"ev":ev,"rp":rpp})];
+    self.request(method,params).await
+     } else {
+        Ok(serde_json::Value::Null)
+     }
+}
 
-
+}
 
 #[cfg(test)]
 mod tests {
@@ -205,10 +278,9 @@ mod tests {
     use stark_core::utils::constants::MASK_250;
     use ethers::types::U256;
     use stark_core::types::request::{
-        BroadcastedTransaction,Transaction,DeployAccountTransactionProperties,DeclareV1,InvokeTransactionV1,EventEmitter,CommonProperties};
-    use serde::{Deserialize, Serialize};
-
-    // Helper function to create a Provider instance for testing
+        BroadcastedTransaction,Transaction,DeployAccountTransactionProperties,DeclareV1,InvokeTransactionV1,InvokeTransactionV0,EventEmitter,CommonProperties,TypeTx,TypeOfTx,BlockNumber};
+    use serde::{Serialize, Deserialize};
+    use stark_core::types::request::BlockTag;   // Helper function to create a Provider instance for testing
     fn setup_provider() -> Provider {
         let url = "https://starknet-mainnet.public.blastapi.io";
         Provider::new(url).unwrap()
@@ -256,7 +328,7 @@ mod tests {
     #[tokio::test]
     async fn test_getnonce() {
         let provider = setup_provider();
-        let result = provider.stark_getnonce("0x06c3731d9669dc2928e44978afe237a862f10774aa2a1876fbaddb604a50d968",52668).await;
+        let result = provider.stark_getnonce("0x03a76598b598d9b611dfb611ad8ececa09cec9f1fb3a41f7ad79e1a134018199",90822).await;
         assert!(result.is_ok());
         println!("nonce : {}",result.unwrap());
     }
@@ -264,7 +336,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_block_with_tx_hashes() {
         let provider = setup_provider();
-        let result = provider.get_block_wtih_tx_hashes(52668).await;
+        let result = provider.get_block_with_tx_hashes(52668).await;
         assert!(result.is_ok());
         println!("block with tx hashes : {}",result.unwrap());
     }
@@ -272,9 +344,17 @@ mod tests {
     #[tokio::test]
     async fn test_get_block_with_txs() {
         let provider = setup_provider();
-        let result = provider.get_block_with_txs(52668).await;
+        let result = provider.get_block_with_txs(BlockNumber::BlockTag(BlockTag::latest)).await;
         assert!(result.is_ok());
-        println!("block with txs : {}",result.unwrap());
+        println!("block with txs using latest enum  : {}",result.unwrap());
+
+        let block_number_result= provider.get_block_with_txs(BlockNumber::Number(95812)).await;
+        assert!(block_number_result.is_ok());
+        println!("block txs using block number:{}",block_number_result.unwrap());
+
+        let block_hash_result = provider.get_block_with_txs(BlockNumber::Hash("0x04029c604ad1da801b55ef0ff6ac5d72153564efb415e3e45bd27bd4abdb61bd".to_string())).await;
+        assert!(block_hash_result.is_ok());
+        println!("block txs using block hash  :{}",block_hash_result.unwrap());
     }
 
     #[tokio::test]
@@ -304,7 +384,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_transaction_by_blockid_and_index() {
         let provider = setup_provider();
-        let result = provider.get_transaction_by_blockid_and_index(54980,1).await;
+        let result = provider.get_transaction_by_blockid_and_index(54980,0).await;
         assert!(result.is_ok());
         println!("transaction details {}",result.unwrap());
     }
@@ -352,19 +432,18 @@ mod tests {
     #[tokio::test]
     async fn test_call() {
         let provider = setup_provider();
-        let func_name = "approve";
+        let func_name = "balanceOf";
         let calldatavec: Vec<String> = vec![
-            "0x7a6f98c03379b9513ca84cca1373ff452a7462a3b61598f0af5bb27ad7f76d1".to_string(),
-            "5840374794613697".to_string()
+            "0x021c500a9e94f6e4fc6fa8fcf44124d86359ab7b0b732884c4cb42bc0a52cd37".to_string()
         ];
         let res = get_selector_from_name(func_name);
         println!("entry point selector is : {}",res);
             let tx: TransactionRequest = TransactionRequest { 
-            contract_address:Some("0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7".to_string()),
-            entry_point_selector:Some("0x0219209e083275171774dab1df80982e9df2096516f06319c5c6d71ae0a8480c".to_string()),
+            contract_address:Some("0x029959a546dda754dc823a7b8aa65862c5825faeaaf7938741d8ca6bfdc69e4e".to_string()),
+            entry_point_selector:Some(res),
             calldata:calldatavec
         };
-        let result = provider.call(tx,87673).await;
+        let result = provider.call(tx,90821).await;
         assert!(result.is_ok());
         println!("call res {}",result.unwrap());
     }
@@ -373,10 +452,10 @@ mod tests {
     async fn test_estimate_fee() {
         let provider = setup_provider();
         let common_properties = CommonProperties{
-            max_fee: 1837758943871232,
+            max_fee: 0,
             version:1,
-            signature:vec!["0x27c41433bb3263a2e7d357a6d7d2b856b19a27b5c6089fa5ec4a55de507c49a".to_string(),"0x18794acabc26005629b1d857cd6e4e7e850614aa3e594b39650858836418d8e".to_string()],
-            nonce:7
+            signature:vec!["156a781f12e8743bd07e20a4484154fd0baccee95d9ea791c121c916ad44ee0".to_string(),"7228267473c670cbb86a644f8696973db978c51acde19431d3f1f8f100794c6".to_string()],
+            nonce:0
         };
         let event_emitter = EventEmitter{
             type_:"sf".to_string(),
@@ -385,36 +464,71 @@ mod tests {
             compiler_class_hash:"fsd".to_string()
         };
         let invoke_transaction = InvokeTransactionV1{
-            sender_address:"0x00451d8a3566c18929c6c7312b7fee619dcb4210870ad5534680da0b17cee431".to_string(),
-            calldata: vec!["0xb9b1a4373de5b1458e598df53195ea3204aa926f46198b50b32ed843ce508b".to_string(),
-            "0x4563918244f40000".to_string()
-            ]
+            type_:TypeTx::INVOKE,
+            sender_address:"0x5b5e9f6f6fb7d2647d81a8b2c2b99cbc9cc9d03d705576d7061812324dca5c0".to_string(),
+            calldata: vec!["0x1".to_string(),
+            "0x7394cbe418daa16e42b87ba67372d4ab4a5df0b05c6e554d158458ce245bc10".to_string(),
+                "0x2f0b3c5710379609eb5495f1ecd348cb28167711b73609fe565a72734550354".to_string(),
+            ("0x0").to_string(),
+            ("0x3").to_string(),
+            ("0x3").to_string(),
+            "0x5b5e9f6f6fb7d2647d81a8b2c2b99cbc9cc9d03d705576d7061812324dca5c0".to_string(),
+            "0x3635c9adc5dea00000".to_string(),
+            ("0x0").to_string()
+            ],
+            version:1,
+            signature:vec!["0x156a781f12e8743bd07e20a4484154fd0baccee95d9ea791c121c916ad44ee0".to_string(),"0x7228267473c670cbb86a644f8696973db978c51acde19431d3f1f8f100794c6".to_string()],
+            nonce:0x0,
+            max_fee: 0x0
         };
+        let invoke_transactionv0= InvokeTransactionV0{
+            contract_address:"0x00057c4b510d66eb1188a7173f31cccee47b9736d40185da8144377b896d5ff3".to_string(),
+            entry_point_selector:"0x02d4c8ea4c8fb9f571d1f6f9b7692fff8e5ceaf73b1df98e7da8c1109b39ae9a".to_string(),
+            calldata:vec!["0x4767b873669406d25dddbf67356e385a14480979e5358a411955d692576aa30".to_string(),
+            "0x1".to_string()]
+        };
+
         let declare_v1 = DeclareV1{
             type_:"fd".to_string(),
             contract_class:"dfsd".to_string(),
             sender_address:"dfsdfdsf".to_string()
         };
+
         let deploy_account_tx_properties: DeployAccountTransactionProperties = DeployAccountTransactionProperties{
             type_:"sfds".to_string(),
             contract_address_salt:"dfds".to_string(),
             constructor_calldata:vec!["dfdsfsd".to_string()],
             class_hash:"fsdfdsfsd".to_string()
         }; 
+
+        let typeoftx = TypeOfTx{
+            type_ : TypeTx::INVOKE
+        };
+        
         let transactions = vec![
             // Transaction::EventEmitter(event_emitter,common_properties.clone())
-            Transaction::InvokeTransactionV1(invoke_transaction,common_properties.clone())
+            Transaction::InvokeTransactionV1(invoke_transaction)
             // Transaction::DeclareV1(declare_v1,common_properties.clone()),
             // Transaction::DeployAccountTransactionProperties(deploy_account_tx_properties,common_properties.clone()),
         ];
-        let result = provider.estimate_fee(transactions,59268).await;
+            
+        let result = provider.estimate_fee(transactions,90821).await;
+        println!("result index 0 is {}",result[0].as_ref().unwrap());
         assert!(result[0].is_ok());
         // assert!(result[1].is_ok());
         // assert!(result[2].is_ok());
         // assert!(result[3].is_ok());
-        println!("result index 0 is {}",result[0].as_ref().unwrap());
         // println!("result index 1 is {}",result[1].as_ref().unwrap());
-        // println!("result index 2 is {}",result[2].as_ref().unwrap());
+        // println!("resuxwlt index 2 is {}",result[2].as_ref().unwrap());
         // println!("result index 3 is {}",result[3].as_ref().unwrap());
     }
+
+    #[tokio::test]
+    async fn test_blockhash_and_number() {
+        let provider = setup_provider();
+        let result = provider.stark_blockhash_and_number().await;
+        assert!(result.is_ok());
+        println!("Block hash and number{}",result.unwrap());
+    }
+
 }
