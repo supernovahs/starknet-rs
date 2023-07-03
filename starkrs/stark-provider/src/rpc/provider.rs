@@ -1,14 +1,12 @@
 use reqwest::Client;
 use url::Url;
 use serde_json::json;
-use serde::{Serialize,Deserialize};
+use serde::{Serialize};
 use serde::de::DeserializeOwned;
 use std::fmt::Debug;
-use stark_core::utils::constants::MASK_250;
 use stark_core::types::request::{
-    TransactionRequest,BroadcastedTransaction,Transaction,DeployAccountTransactionProperties,DeclareV1,InvokeTransactionV1,EventEmitter,CommonProperties,TypeTx,BlockNumber};
+    TransactionRequest,Transaction,DeclareV1,InvokeTransactionV1,EventEmitter,CommonProperties,TypeTx,BlockNumber};
 use num_bigint::BigInt;
-use std::str::FromStr;
 use num_traits::One;
 use num_traits::Num;
 use ethers::types::{U256 };
@@ -81,11 +79,27 @@ pub async fn stark_blockhash_and_number(&self) ->Result<serde_json::Value,reqwes
     self.request(method,params).await
 } 
 
-pub async fn stark_getnonce(&self,address:&str,block_number:u64) -> Result<serde_json::Value,reqwest::Error>{
+pub async fn stark_getnonce(&self,address:&str,val:BlockNumber) -> Result<serde_json::Value,reqwest::Error>{
     let method = "starknet_getNonce";
-    let params = [serde_json::json!({ "block_number": block_number }), serde_json::json!(address)];
-    println!("params : {:?}",params);
-    self.request(method,params).await
+
+    let result: Result<serde_json::Value, reqwest::Error>;
+    match val{
+        BlockNumber::Number(val) =>{
+            let params = [serde_json::json!({ "block_number": val }),serde_json::json!(address)];
+            result = self.request(method,params).await
+        }
+        BlockNumber::BlockTag(val) =>{
+            let params = [serde_json::json!(val),serde_json::json!(address)];
+            result= self.request(method,params).await
+        }
+        BlockNumber::Hash(val) =>{
+            let params = [serde_json::json!({"block_hash":val}),serde_json::json!(address)];
+            result = self.request(method,params).await
+        }
+    }
+    result
+
+   
 } 
 
 pub async fn get_block_with_tx_hashes(&self,val:BlockNumber) -> Result<serde_json::Value,reqwest::Error>{
@@ -181,34 +195,95 @@ pub async fn get_transaction_by_blockid_and_index(&self,block_number:u64,index:u
     self.request(method,params).await
 }
 
-pub async  fn get_transaction_receipt(&self,hash:&str) -> Result<serde_json::Value,reqwest::Error>{
+pub async  fn get_transaction_receipt(&self,hash:String) -> Result<serde_json::Value,reqwest::Error>{
     let method = "starknet_getTransactionReceipt";
     let params = [serde_json::json!(hash)];
     self.request(method,params).await
 }
 
-pub async fn get_class(&self,block_number:u64,class_hash:&str) -> Result<serde_json::Value,reqwest::Error>{
+pub async fn get_class(&self,val:BlockNumber,class_hash:&str) -> Result<serde_json::Value,reqwest::Error>{
     let method = "starknet_getClass";
-    let params = [serde_json::json!({"block_number":block_number}),serde_json::json!(class_hash)];
-    self.request(method,params).await
+
+    let result:Result<serde_json::Value,reqwest::Error>;
+    result = match val {
+        BlockNumber::BlockTag(val) =>{
+            let params  = [serde_json::json!(class_hash),serde_json::json!(val)];
+            self.request(method,params).await
+        }
+        BlockNumber::Hash(val)=>{
+            let params  = [serde_json::json!(class_hash),serde_json::json!({"block_hash":val})];
+            self.request(method,params).await
+        }
+        BlockNumber::Number(val) =>{
+            let params = [serde_json::json!(class_hash),serde_json::json!({"block_number":val})];
+            self.request(method,params).await
+        }
+    };
+ result
+
+    
 }
 
-pub async fn get_class_hash_at(&self,block_number:u64,contract_address:&str) -> Result<serde_json::Value,reqwest::Error>{
+pub async fn get_class_hash_at(&self,val:BlockNumber,contract_address:&str) -> Result<serde_json::Value,reqwest::Error>{
     let method = "starknet_getClassHashAt";
-    let params = [serde_json::json!({"block_number":block_number}),serde_json::json!(contract_address)];
-    self.request(method,params).await
+    let result:Result<serde_json::Value,reqwest::Error>;
+    result = match val {
+        BlockNumber::BlockTag(val) =>{
+            let params  = [serde_json::json!(val),serde_json::json!(contract_address)];
+            self.request(method,params).await
+        }
+        BlockNumber::Hash(val)=>{
+            let params  = [serde_json::json!({"block_hash":val}),serde_json::json!(contract_address)];
+            self.request(method,params).await
+        }
+        BlockNumber::Number(val) =>{
+            let params = [serde_json::json!({"block_number":val}),serde_json::json!(contract_address)];
+            self.request(method,params).await
+        }
+    };
+ result 
 }
 
-pub async fn get_class_at(&self,block_number:u64,contract_address:&str) -> Result<serde_json::Value,reqwest::Error> {
+pub async fn get_class_at(&self,val:BlockNumber,contract_address:&str) -> Result<serde_json::Value,reqwest::Error> {
     let method = "starknet_getClassAt";
-    let params = [serde_json::json!({"block_number":block_number}),serde_json::json!(contract_address)];
-    self.request(method,params).await
+    let result:Result<serde_json::Value,reqwest::Error>;
+    result = match val {
+        BlockNumber::BlockTag(val) =>{
+            let params  = [serde_json::json!(val),serde_json::json!(contract_address)];
+            self.request(method,params).await
+        }
+        BlockNumber::Hash(val)=>{
+            let params  = [serde_json::json!({"block_hash":val}),serde_json::json!(contract_address)];
+            self.request(method,params).await
+        }
+        BlockNumber::Number(val) =>{
+            let params = [serde_json::json!({"block_number":val}),serde_json::json!(contract_address)];
+            self.request(method,params).await
+        }
+    };
+ result
+    
 } 
 
-pub async fn get_block_transaction_count(&self,block_number:u64) -> Result<serde_json::Value,reqwest::Error> {
+pub async fn get_block_transaction_count(&self,val:BlockNumber) -> Result<serde_json::Value,reqwest::Error> {
     let method = "starknet_getBlockTransactionCount";
-    let params = [serde_json::json!({"block_number":block_number})];
-    self.request(method,params).await
+    let result:Result<serde_json::Value,reqwest::Error>;
+    result = match val {
+        BlockNumber::BlockTag(val) =>{
+            let params  = [serde_json::json!(val),];
+            self.request(method,params).await
+        }
+        BlockNumber::Hash(val)=>{
+            let params  = [serde_json::json!({"block_hash":val})];
+            self.request(method,params).await
+        }
+        BlockNumber::Number(val) =>{
+            let params = [serde_json::json!({"block_number":val})];
+            self.request(method,params).await
+        }
+    };
+ result
+    
 }
 
 pub async fn call(&self,tx:TransactionRequest,block_number:u64) -> Result<serde_json::Value,reqwest::Error>{
@@ -312,20 +387,14 @@ pub async fn getEvents(&self, tx:Transaction) -> Result<serde_json::Value,reqwes
 mod tests {
     use super::Provider;
     use serde_json::Value;
-    use ethers::{utils::keccak256};
     use stark_core::types::request::TransactionRequest;
     use primitive_types::{H256};
-    use sha3::{Digest,Keccak256};
     use crate::rpc::get_selector_from_name;
     extern crate hex;
-    use hex::encode;
-    use stark_core::utils::constants::MASK_250;
-    use ethers::types::U256;
+  
     use stark_core::types::request::{
         BroadcastedTransaction,Transaction,DeployAccountTransactionProperties,DeclareV1,InvokeTransactionV1,InvokeTransactionV0,EventEmitter,CommonProperties,TypeTx,TypeOfTx,BlockNumber};
-    use serde::{Serialize, Deserialize};
     use stark_core::types::request::BlockTag;  
-    use core::ptr::null ;
     fn setup_provider() -> Provider {
         let url = "https://starknet-mainnet.public.blastapi.io";
         Provider::new(url).unwrap()
@@ -373,9 +442,23 @@ mod tests {
     #[tokio::test]
     async fn test_getnonce() {
         let provider = setup_provider();
-        let result = provider.stark_getnonce("0x03a76598b598d9b611dfb611ad8ececa09cec9f1fb3a41f7ad79e1a134018199",90822).await;
-        assert!(result.is_ok());
-        println!("nonce : {}",result.unwrap());
+
+        let block_number_result = provider.stark_getnonce("0x03a76598b598d9b611dfb611ad8ececa09cec9f1fb3a41f7ad79e1a134018199",BlockNumber::Number(90822)).await;
+        assert!(block_number_result.is_ok());
+        println!("nonce result using block number  : {}",block_number_result.unwrap());
+
+        let block_hash_result = provider.stark_getnonce("0x03a76598b598d9b611dfb611ad8ececa09cec9f1fb3a41f7ad79e1a134018199",BlockNumber::Hash("0x046e5fd2095a1f30b99756ff209740a3893b31f5a1198347a23c3e7fc8ff9e5c".to_string())).await;
+        assert!(block_hash_result.is_ok());
+        println!(" nonce result using block  hash : {} ", block_hash_result.unwrap());
+
+        let latest_block_result = provider.stark_getnonce("0x03a76598b598d9b611dfb611ad8ececa09cec9f1fb3a41f7ad79e1a134018199", BlockNumber::BlockTag(BlockTag::latest)).await;
+        assert!(latest_block_result.is_ok());
+        println!("nonce result using latest block hash : {}", latest_block_result.unwrap());
+
+        let pending_block_result = provider.stark_getnonce("0x03a76598b598d9b611dfb611ad8ececa09cec9f1fb3a41f7ad79e1a134018199", BlockNumber::BlockTag(BlockTag::latest)).await;
+        assert!(pending_block_result.is_ok());
+        println!("nonce result using latest block hash : {}", pending_block_result.unwrap());
+
     }
 
     #[tokio::test]
@@ -477,7 +560,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_transaction_receipt() {
         let provider = setup_provider();
-        let result = provider.get_transaction_receipt("0x035475b21b0bc1799053bbf41f191d480e81bdb8eea6874d214dc5cc9882092e").await;
+        let result = provider.get_transaction_receipt("0x035475b21b0bc1799053bbf41f191d480e81bdb8eea6874d214dc5cc9882092e".to_string()).await;
         assert!(result.is_ok());
         println!("transaction details {}",result.unwrap());
     }
@@ -485,33 +568,86 @@ mod tests {
     #[tokio::test]
     async fn test_get_class() {
         let provider = setup_provider();
-        let result = provider.get_class(54980,"0x0108a32ec851d37c8f15387dadc87dc80c302c5278b24211ea5b227a4bfdc752").await;
-        assert!(result.is_ok());
-        println!("class details {}",result.unwrap());
+
+        let block_number_result = provider.get_class(BlockNumber::Number(54980),"0x0108a32ec851d37c8f15387dadc87dc80c302c5278b24211ea5b227a4bfdc752").await;
+        assert!(block_number_result.is_ok());
+        println!("class details {}",block_number_result.unwrap());
+
+        let block_hash_result = provider.get_class(BlockNumber::Hash("0x00cd5cd215737597129af9a0a3e542423d0640d9b0ab4fd6662a78069dac69ef".to_string()),"0x0108a32ec851d37c8f15387dadc87dc80c302c5278b24211ea5b227a4bfdc752").await;
+        assert!(block_hash_result.is_ok());
+        println!("class details {}",block_hash_result.unwrap());
+
+        let block_tag_latest_result = provider.get_class(BlockNumber::BlockTag(BlockTag::latest),"0x0108a32ec851d37c8f15387dadc87dc80c302c5278b24211ea5b227a4bfdc752").await;
+        assert!(block_tag_latest_result.is_ok());
+        println!("class details {}",block_tag_latest_result.unwrap());
+
+        let block_tag_pending_result = provider.get_class(BlockNumber::BlockTag(BlockTag::pending),"0x0108a32ec851d37c8f15387dadc87dc80c302c5278b24211ea5b227a4bfdc752").await;
+        assert!(block_tag_pending_result.is_ok());
+        println!("class details {}",block_tag_pending_result.unwrap());
     }
 
     #[tokio::test]
     async fn test_get_class_hash_at() {
         let provider = setup_provider();
-        let result = provider.get_class_hash_at(54980,"0x03d39f7248fb2bfb960275746470f7fb470317350ad8656249ec66067559e892").await;
-        assert!(result.is_ok());
-        println!("class hash details {}",result.unwrap());
+
+        let block_number_result = provider.get_class_hash_at(BlockNumber::Number(54980), "0x03d39f7248fb2bfb960275746470f7fb470317350ad8656249ec66067559e892").await;
+        assert!(block_number_result.is_ok());
+        println!("class hash detail using block number {}",block_number_result.unwrap());
+
+        let block_hash_result = provider.get_class_hash_at(BlockNumber::Hash("0x00cd5cd215737597129af9a0a3e542423d0640d9b0ab4fd6662a78069dac69ef".to_string()), "0x03d39f7248fb2bfb960275746470f7fb470317350ad8656249ec66067559e892").await;
+        assert!(block_hash_result.is_ok());
+        println!("class hash details using block hash : {}", block_hash_result.unwrap());
+
+        let pending_class_hash_result = provider.get_class_hash_at(BlockNumber::BlockTag(BlockTag::pending),"0x03d39f7248fb2bfb960275746470f7fb470317350ad8656249ec66067559e892" ).await;
+        assert!(pending_class_hash_result.is_ok());
+        println!("class hash details using pending block : {}", pending_class_hash_result.unwrap());
+
+        let latest_class_hash_result = provider.get_class_hash_at(BlockNumber::BlockTag(BlockTag::latest),"0x03d39f7248fb2bfb960275746470f7fb470317350ad8656249ec66067559e892").await;
+        assert!(latest_class_hash_result.is_ok());
+        println!("class hash details using latest block ; {}", latest_class_hash_result.unwrap());
     }
 
     #[tokio::test]
     async fn test_get_class_at(){
         let provider = setup_provider();
-        let result = provider.get_class_at(54980,"0x03d39f7248fb2bfb960275746470f7fb470317350ad8656249ec66067559e892").await;
-        assert!(result.is_ok());
-        println!("class details {}",result.unwrap());
+
+        let block_number_result = provider.get_class_at(BlockNumber::Number(54980),"0x03d39f7248fb2bfb960275746470f7fb470317350ad8656249ec66067559e892").await;
+        assert!(block_number_result.is_ok());
+        println!("class details using block number  {}",block_number_result.unwrap());
+
+        let block_hash_result = provider.get_class_at(BlockNumber::Hash("0x00cd5cd215737597129af9a0a3e542423d0640d9b0ab4fd6662a78069dac69ef".to_string()), "0x03d39f7248fb2bfb960275746470f7fb470317350ad8656249ec66067559e892").await;
+        assert!(block_hash_result.is_ok());
+        println!("class details using block hash:{}",block_hash_result.unwrap());
+
+        let latest_block_result = provider.get_class_at(BlockNumber::BlockTag((BlockTag::latest)), "0x03d39f7248fb2bfb960275746470f7fb470317350ad8656249ec66067559e892").await;
+        assert!(latest_block_result.is_ok());
+        println!("latest block result :{}",latest_block_result.unwrap());
+
+        let pending_block_result = provider.get_class_at(BlockNumber::BlockTag((BlockTag::pending)), "0x03d39f7248fb2bfb960275746470f7fb470317350ad8656249ec66067559e892").await;
+        assert!(pending_block_result.is_ok());
+        println!("latest block result :{}",pending_block_result.unwrap());
+
     }
 
     #[tokio::test]
     async fn test_get_block_transaction_count() {
         let provider = setup_provider();
-        let result = provider.get_block_transaction_count(54980).await;
-        assert!(result.is_ok());
-        println!("block transaction count {}",result.unwrap());
+
+        let block_number_result = provider.get_block_transaction_count(BlockNumber::Number((54980))).await;
+        assert!(block_number_result.is_ok());
+        println!("block transaction count {}",block_number_result.unwrap());
+
+        let block_hash_result = provider.get_block_transaction_count(BlockNumber::Hash("0x00cd5cd215737597129af9a0a3e542423d0640d9b0ab4fd6662a78069dac69ef".to_string())).await;
+        assert!(block_hash_result.is_ok());
+        println!("block hash result : {}",block_hash_result.unwrap());
+
+        let latest_block_result = provider.get_block_transaction_count(BlockNumber::BlockTag(BlockTag::latest)).await;
+        assert!(latest_block_result.is_ok());
+        println!("pending  block hash result : {}",latest_block_result.unwrap());
+
+        let pending_block_result = provider.get_block_transaction_count(BlockNumber::BlockTag(BlockTag::pending)).await;
+        assert!(pending_block_result.is_ok());
+        println!("pending  block hash result : {}",pending_block_result.unwrap());
     }
 
     #[tokio::test]
